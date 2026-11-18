@@ -1,0 +1,643 @@
+
+<!DOCTYPE html>
+<html>
+<head>
+    <title>My Programming Language</title>
+
+    <style>
+        body {
+            background: #181818;
+            color: white;
+            font-family: Arial, sans-serif;
+            padding: 25px;
+        }
+
+        textarea {
+            width: 100%;
+            height: 300px;
+            background: #252525;
+            color: #fff;
+            border: 1px solid #444;
+            border-radius: 8px;
+            padding: 15px;
+            box-sizing: border-box;
+            font-family: monospace;
+            font-size: 15px;
+            resize: vertical;
+        }
+
+        button {
+            background: #5865f2;
+            color: white;
+            border: none;
+            border-radius: 6px;
+            padding: 12px 22px;
+            cursor: pointer;
+            margin-top: 12px;
+        }
+
+        .panel {
+            background: #252525;
+            border-radius: 8px;
+            padding: 15px;
+            margin-top: 20px;
+        }
+
+        #preview {
+            background: white;
+            color: black;
+            min-height: 150px;
+            padding: 20px;
+            border-radius: 6px;
+        }
+
+        pre {
+            white-space: pre-wrap;
+            overflow-wrap: anywhere;
+        }
+
+        iframe {
+            width: 100%;
+            height: 200px;
+            border: none;
+            background: white;
+            border-radius: 6px;
+        }
+
+        .error {
+            color: #ff6464;
+        }
+    </style>
+</head>
+
+<body>
+
+<h1>would be easy if it was good!</h1>
+<p>Write your code below:</p>
+
+<textarea id="editor">
+create text text id
+
+code
+number x = 5
+</textarea>
+
+<br>
+
+<button onclick="runCode()">Run Code</button>
+
+<div class="panel">
+    <h2>Preview</h2>
+    <div id="preview">
+        <iframe id="result"></iframe>
+    </div>
+</div>
+
+<div class="panel">
+    <h2>Generated HTML</h2>
+    <pre id="htmlOutput"></pre>
+</div>
+
+<div class="panel">
+    <h2>Compiler Errors</h2>
+    <pre id="errors"></pre>
+</div>
+
+<div class="panel">
+    <h2>Documentation</h2>
+    <pre>
+    Create Text Text Id
+    Creates text with the 3rd value being the text that shows
+    
+    Create Button Text Id
+    Creates a button that when clicked will do something in the code
+
+    Code
+    anything below here is not the objects but the code that uses them
+
+    Number VariableName = value
+    sets a variable to a value
+
+    Button Id Clicked
+    
+    end
+    function where when the button is clicked something happens
+
+    add 1 to variable name
+    pretty self explanitory, theres also one for the other three
+
+    id color/colour = color
+    id textsize = textsize in pixels
+    idk if these ones actually work
+</pre>
+</div>
+<script>
+
+// ==========================================
+// MY PROGRAMMING LANGUAGE COMPILER
+// ==========================================
+
+function compile(source) {
+
+    const lines = source.split("\n");
+
+    let html = "";
+    let js = "";
+
+    const objects = {};
+    const variables = new Set();
+    const events = [];
+
+    let inCode = false;
+    let currentEvent = null;
+
+    const name = "[a-zA-Z_$][\\w$]*";
+
+    function error(message, line) {
+        throw new Error(`Line ${line}: ${message}`);
+    }
+
+    function getObject(id, line) {
+        if (!objects[id]) {
+            error("Object not found: " + id, line);
+        }
+        return objects[id];
+    }
+
+    function getVariable(id, line) {
+        if (!variables.has(id)) {
+            error("Variable not found: " + id, line);
+        }
+    }
+
+    function validValue(value) {
+        return /^-?\d+(?:\.\d+)?$/.test(value)
+            || variables.has(value);
+    }
+
+    function addJS(code) {
+        if (currentEvent) {
+            events[events.length - 1].code += code + "\n";
+        } else {
+            js += code + "\n";
+        }
+    }
+
+    // ======================================
+    // READ EACH LINE
+    // ======================================
+
+    lines.forEach((raw, index) => {
+
+        const line = raw.trim();
+        const n = index + 1;
+
+        if (!line) return;
+
+        // CODE SECTION
+
+        if (line === "code") {
+            if (inCode) error("Code section already started", n);
+            inCode = true;
+            return;
+        }
+
+        // ======================================
+        // CREATE OBJECTS
+        // ======================================
+
+        if (!inCode) {
+
+            const match = line.match(
+                /^create (button|text|input) (.+) ([a-zA-Z_$][\w$]*)$/
+            );
+
+            if (!match) {
+                error("Unknown create command", n);
+            }
+
+            const [, type, content, id] = match;
+
+            if (objects[id]) {
+                error("Object already exists: " + id, n);
+            }
+
+            objects[id] = type;
+
+            const tags = {
+                button: "button",
+                text: "p",
+                input: "input"
+            };
+
+            const tag = tags[type];
+
+            if (type === "input") {
+                html += `<input id="${escapeHTML(id)}" placeholder="${escapeHTML(content)}">\n`;
+            } else {
+                html += `<${tag} id="${escapeHTML(id)}">${escapeHTML(content)}</${tag}>\n`;
+            }
+
+            return;
+        }
+
+        // ======================================
+        // VARIABLES
+        // ======================================
+
+        let match = line.match(
+            new RegExp(`^number (${name}) = (-?\\d+(?:\\.\\d+)?)$`)
+        );
+
+        if (match) {
+
+            const [, variable, value] = match;
+
+            if (variables.has(variable)) {
+                error("Variable already exists: " + variable, n);
+            }
+
+            variables.add(variable);
+
+            addJS(`let ${variable} = ${value};`);
+
+            return;
+        }
+
+        // ======================================
+        // BUTTON CLICK EVENTS
+        // ======================================
+
+        match = line.match(
+            new RegExp(`^button (${name}) clicked$`)
+        );
+
+        if (match) {
+
+            const id = match[1];
+
+            if (getObject(id, n) !== "button") {
+                error(id + " is not a button", n);
+            }
+
+            if (currentEvent) {
+                error("An event is already open", n);
+            }
+
+            currentEvent = id;
+
+            events.push({
+                id: id,
+                code: ""
+            });
+
+            return;
+        }
+
+        // ======================================
+        // END EVENT
+        // ======================================
+
+        if (line === "end") {
+
+            if (!currentEvent) {
+                error("No event to end", n);
+            }
+
+            currentEvent = null;
+
+            return;
+        }
+
+        // ======================================
+        // MATH COMMANDS
+        // ======================================
+
+        if (currentEvent) {
+
+            const event = events[events.length - 1];
+
+            // ADD
+            match = line.match(
+                new RegExp(`^add (-?\\d+(?:\\.\\d+)?|${name}) to (${name})$`)
+            );
+
+            if (match) {
+
+                const [, amount, variable] = match;
+
+                getVariable(variable, n);
+
+                if (!validValue(amount)) {
+                    error("Invalid number or variable: " + amount, n);
+                }
+
+                event.code += `${variable} += ${amount};\n`;
+                return;
+            }
+
+            // SUBTRACT
+            match = line.match(
+                new RegExp(`^subtract (-?\\d+(?:\\.\\d+)?|${name}) from (${name})$`)
+            );
+
+            if (match) {
+
+                const [, amount, variable] = match;
+
+                getVariable(variable, n);
+
+                if (!validValue(amount)) {
+                    error("Invalid number or variable: " + amount, n);
+                }
+
+                event.code += `${variable} -= ${amount};\n`;
+                return;
+            }
+
+            // MULTIPLY
+            match = line.match(
+                new RegExp(`^multiply (${name}) by (-?\\d+(?:\\.\\d+)?|${name})$`)
+            );
+
+            if (match) {
+
+                const [, variable, amount] = match;
+
+                getVariable(variable, n);
+
+                if (!validValue(amount)) {
+                    error("Invalid number or variable: " + amount, n);
+                }
+
+                event.code += `${variable} *= ${amount};\n`;
+                return;
+            }
+
+            // DIVIDE
+            match = line.match(
+                new RegExp(`^divide (${name}) by (-?\\d+(?:\\.\\d+)?|${name})$`)
+            );
+
+            if (match) {
+
+                const [, variable, amount] = match;
+
+                getVariable(variable, n);
+
+                if (!validValue(amount)) {
+                    error("Invalid number or variable: " + amount, n);
+                }
+
+                event.code += `${variable} /= ${amount};\n`;
+                return;
+            }
+        }
+
+        // ======================================
+        // OBJECT PROPERTIES
+        // ======================================
+
+        match = line.match(
+            new RegExp(`^(${name}) (text|color|colour|textsize|placeholder) = (.+)$`)
+        );
+
+        if (match) {
+
+            const [, id, property, value] = match;
+
+            const type = getObject(id, n);
+
+            const target =
+                `document.getElementById(${JSON.stringify(id)})`;
+
+            // TEXT
+            if (property === "text") {
+
+                const variableMatch = value.match(
+                    new RegExp(`^number (${name})$`)
+                );
+
+                const objectProperty =
+                    type === "input" ? "value" : "textContent";
+
+                if (variableMatch) {
+
+                    const variable = variableMatch[1];
+
+                    getVariable(variable, n);
+
+                    addJS(`${target}.${objectProperty} = ${variable};`);
+
+                } else {
+
+                    if (!/^(['"]).*\1$/.test(value)) {
+                        error("Text must be inside quotes", n);
+                    }
+
+                    let textValue;
+
+                    try {
+                        textValue = JSON.parse(value);
+                    } catch {
+                        error("Invalid text string", n);
+                    }
+
+                    addJS(
+                        `${target}.${objectProperty} = ${JSON.stringify(textValue)};`
+                    );
+                }
+
+                return;
+            }
+
+            // COLOR / COLOUR
+            if (property === "color" || property === "colour") {
+
+                let color;
+
+                try {
+                    color = JSON.parse(value);
+                } catch {
+                    color = value;
+                }
+
+                if (
+                    typeof color !== "string" ||
+                    !/^(#[0-9a-fA-F]{3,8}|[a-zA-Z]+|rgb\([\d\s,%]+\)|rgba\([\d\s,.%]+\)|hsl\([\d\s,%]+\))$/.test(color)
+                ) {
+                    error("Invalid colour", n);
+                }
+
+                addJS(
+                    `${target}.style.color = ${JSON.stringify(color)};`
+                );
+
+                return;
+            }
+
+            // TEXT SIZE
+            if (property === "textsize") {
+
+                if (!/^\d+(?:\.\d+)?$/.test(value)) {
+                    error("Text size must be a number", n);
+                }
+
+                addJS(
+                    `${target}.style.fontSize = ${JSON.stringify(value + "px")};`
+                );
+
+                return;
+            }
+
+            // PLACEHOLDER
+            if (property === "placeholder") {
+
+                if (type !== "input") {
+                    error("Placeholder requires an input object", n);
+                }
+
+                let placeholder;
+
+                try {
+                    placeholder = JSON.parse(value);
+                } catch {
+                    error("Placeholder must be quoted", n);
+                }
+
+                addJS(
+                    `${target}.placeholder = ${JSON.stringify(placeholder)};`
+                );
+
+                return;
+            }
+        }
+
+        // ======================================
+        // UNKNOWN COMMAND
+        // ======================================
+
+        error("Unknown command: " + line, n);
+
+    });
+
+    // ======================================
+    // CHECK UNFINISHED EVENTS
+    // ======================================
+
+    if (currentEvent) {
+        throw new Error("Missing end for event: " + currentEvent);
+    }
+
+    // ======================================
+    // GENERATE JAVASCRIPT EVENTS
+    // ======================================
+
+    events.forEach(event => {
+
+        js += `
+document.getElementById(${JSON.stringify(event.id)})
+.addEventListener("click", function() {
+${event.code}
+});
+`;
+
+    });
+
+    return {
+        html: html,
+        js: js
+    };
+}
+
+
+// ==========================================
+// HTML ESCAPING
+// ==========================================
+
+function escapeHTML(value) {
+
+    return value.replace(/[&<>"']/g, char => ({
+        "&": "&amp;",
+        "<": "&lt;",
+        ">": "&gt;",
+        '"': "&quot;",
+        "'": "&#39;"
+    })[char]);
+
+}
+
+
+// ==========================================
+// RUN COMPILER
+// ==========================================
+
+
+function runCode() {
+
+    const source = document.getElementById("editor").value;
+
+    const htmlOutput = document.getElementById("htmlOutput");
+    const errors = document.getElementById("errors");
+    const result = document.getElementById("result");
+
+    try {
+
+        const compiled = compile(source);
+
+        errors.textContent = "";
+
+        // Build the complete HTML document
+        const completeHTML = `<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+</head>
+<body>
+
+${compiled.html}
+
+<script>
+${compiled.js}
+<\/script>
+
+</body>
+</html>`;
+
+        // Display complete HTML
+        htmlOutput.textContent = completeHTML;
+
+        // Render preview
+        result.srcdoc = completeHTML;
+
+    } catch (error) {
+
+        errors.textContent = error.message;
+        htmlOutput.textContent = "";
+        result.srcdoc = "<body>Compilation failed.</body>";
+
+    }
+}
+
+
+// Copy entire generated HTML
+function copyCode() {
+
+    const code = document.getElementById("htmlOutput").textContent;
+
+    navigator.clipboard.writeText(code).then(() => {
+        document.getElementById("copyButton").textContent = "Copied!";
+        
+        setTimeout(() => {
+            document.getElementById("copyButton").textContent = "Copy Code";
+        }, 2000);
+    });
+
+}
+
+
+</script>
+
+</body>
+</html>
